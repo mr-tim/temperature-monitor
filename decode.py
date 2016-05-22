@@ -1,3 +1,14 @@
+from datetime import datetime, timedelta
+import logging
+logging.basicConfig(format='%(asctime)s %(message)s', filename='temperatures.log', level=logging.DEBUG)
+
+console = logging.StreamHandler()
+console.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s %(message)s')
+console.setFormatter(formatter)
+logging.getLogger('').addHandler(console)
+
+
 import struct
 import socket
 
@@ -52,17 +63,39 @@ def signals():
 
 sync_pulses = []
 previous_end = -1
+last_reading = None
+
+recent_values = {}
+
+temperature_mappings = {}
+
 bits = [1]
 for signal in signals():
     start, end = (signal)
     pulse_length = end-start
     if (previous_end != -1 and previous_end < start-50):
-        if len(bits) == 63:
-            bits.append(0)
-        print "0x%x" % int(''.join(map(str, bits)), 2), bits, len(bits)
+        if last_reading is not None and last_reading < (datetime.now() - timedelta(seconds=5)):
+            recent_values = {}
+            logging.info('---')
+
+        value = "0x%x" % int(''.join(map(str, bits)), 2)
+        logging.info("decoded value: " + value)
+
+        if value in recent_values:
+            #2 values the same
+            logging.info("Agreed value: %s" % value)
+
+            if not value in temperature_mappings:
+                current_temps = raw_input('Current temperatures? ')
+                logging.info('current temps: ' + current_temps)
+                temperature_mappings[value] = current_temps
+
+        recent_values[value] = 1
+
         sync_pulses = []
         bits = [1]
         previous_end = -1
+        last_reading = datetime.now()
 
     if len(sync_pulses) < 8 and pulse_length < 13 and pulse_length > 5:
         sync_pulses.append(signal)
