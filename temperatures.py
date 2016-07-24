@@ -127,15 +127,8 @@ def width_multiple(w):
 if __name__ == '__main__':
     analog_source = dc_adjustment(wav_source('2_pulses.wav'))
 
-    # samples = sorted(list(analog_source))
-    #
-    # print "%s samples" % len(samples)
-    # print "%s max" % max(samples)
-    # print "%s 95%%" % samples[int(0.95*len(samples))]
+    source = binary(analog_source, 3000)
 
-    source = binary(dc_adjustment(wav_source('2_pulses.wav')), 3000)
-
-    #print max()
     for i in range(4):
         wait_for_sync(source)
 
