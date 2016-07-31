@@ -2,6 +2,8 @@ from datetime import datetime, timedelta
 import wave
 import socket
 import struct
+import json
+import string
 
 def wav_source(filename):
     r = wave.open(filename)
@@ -113,7 +115,7 @@ def manchester_decode(source):
 
     multiples = map(width_multiple, pulse_widths)
 
-    current_bit = False
+    current_bit = True
     bits = []
     i=0
     while i < len(multiples):
@@ -130,10 +132,8 @@ def manchester_decode(source):
     # print bits
 
     if len(bits) > 8:
-        s = str(int(''.join(map(str, bits)), 2))
-        if len(s) == 31:
-            #print "%s: %s (%s)" % (datetime.now(), s, len(s))
-            return (datetime.now(), s)
+        s = str(hex(int(''.join(map(str, bits)), 2)))
+        return (datetime.now(), s)
 
     return None
 
@@ -164,18 +164,28 @@ if __name__ == '__main__':
     last_signal_time = None
     last_signal = None
 
-    while True:
-        wait_for_sync(source)
-        result = manchester_decode(source)
-        if result != None:
-            signal_time, signal = result
-            if last_signal_time != None:
-                if datetime.now()-last_signal_time < timedelta(seconds=1) \
-                    and last_signal == signal \
-                    and (last_result_time is None or ((datetime.now() - last_result_time) > timedelta(seconds=5))):
-                    last_result_time = datetime.now()
+    try:
+        table = string.maketrans('569a', '0123')
+        while True:
+            wait_for_sync(source)
+            result = manchester_decode(source)
+            if result != None:
+                (signal_time, signal) = result
+                if last_signal_time != None:
+                    if datetime.now()-last_signal_time < timedelta(seconds=1) \
+                        and last_signal == signal \
+                        and (last_result_time is None or ((datetime.now() - last_result_time) > timedelta(seconds=5))):
+                        last_result_time = datetime.now()
 
-                    print "Confirmed result: %s at %s" % (signal, signal_time)
+                        print "Confirmed result: %s at %s" % (signal, signal_time)
 
-            last_signal_time = signal_time
-            last_signal = signal
+                        temp1hex = int(signal[10:15].translate(table), base=2)-532
+                        temp2hex = int(signal[15:20].translate(table), base=2)-532
+
+                        print "Temps: %s, %s" % (temp1hex, temp2hex)
+
+                last_signal_time = signal_time
+                last_signal = signal
+
+    except KeyboardInterrupt:
+        pass
