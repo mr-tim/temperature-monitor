@@ -104,7 +104,6 @@ def manchester_decode(source):
         timer += 1
 
         if last_value != s:
-            #print "Edge at %s" % timer
             if last_edge != -1:
                 w = timer-last_edge
                 pulse_widths.append(w)
@@ -157,6 +156,7 @@ if __name__ == '__main__':
     #analog_source = dc_adjustment(udp_source("127.0.0.1", 7355))
     #analog_source = wav_source('gqrx_20160724_151107_433810400.wav')
     analog_source = udp_source("127.0.0.1", 7355)
+    analog_source = dc_adjustment(analog_source)
 
     source = binary(analog_source, 20000)
 
@@ -167,7 +167,6 @@ if __name__ == '__main__':
     while True:
         wait_for_sync(source)
         result = manchester_decode(source)
-
         if result != None:
             signal_time, signal = result
             if last_signal_time != None:
@@ -180,5 +179,3 @@ if __name__ == '__main__':
 
             last_signal_time = signal_time
             last_signal = signal
-
-
