@@ -1,4 +1,6 @@
+from datetime import datetime, timedelta
 import wave
+import socket
 import struct
 
 def wav_source(filename):
@@ -11,6 +13,22 @@ def wav_source(filename):
         value = struct.unpack("<h", frame)[0]
 
         yield value
+
+def udp_source(host, port):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind((host, port))
+
+    b = ''
+
+    while True:
+        # 48khz 16 bit signed, le (S16LE)
+        data, addr = sock.recvfrom(1024)
+        b = b+data
+
+        while len(b) > 2:
+            value = struct.unpack("<h", b[0:2])[0]
+            b = b[2:]
+            yield value
 
 
 def dc_adjustment(source):
@@ -57,13 +75,15 @@ def wait_for_sync(source):
                 and (last_pulse_at == 0 or (t-last_pulse_at < 0.01)):
                     pulse_count += 1
                     last_pulse_at = t
-                    #print "Pulse! %0.6f" % t
-            else:
+
+            elif pulse_count != 0:
                 pulse_count = 0
                 last_pulse_at = 0
+                t = 0
 
             if pulse_count == 8:
-                #print "synced!"
+                pulse_count = 0
+                last_pulse_at = 0
                 break
 
         count += 1
@@ -102,13 +122,21 @@ def manchester_decode(source):
             current_bit = not current_bit
             bits.append(1 if current_bit else 0)
             i+=1
-        elif multiples[i] == 1 and multiples[i+1] == 1:
+        elif multiples[i] == 1 and i+1 < len(multiples) and multiples[i+1] == 1:
             bits.append(1 if current_bit else 0)
             i+=2
         else:
             break
-    s = str(int(''.join(map(str, bits)), 2))
-    print s
+
+    # print bits
+
+    if len(bits) > 8:
+        s = str(int(''.join(map(str, bits)), 2))
+        if len(s) == 31:
+            #print "%s: %s (%s)" % (datetime.now(), s, len(s))
+            return (datetime.now(), s)
+
+    return None
 
 
 def width_multiple(w):
@@ -125,11 +153,32 @@ def width_multiple(w):
 
 
 if __name__ == '__main__':
-    analog_source = dc_adjustment(wav_source('2_pulses.wav'))
+    #analog_source = dc_adjustment(wav_source('2_pulses.wav'))
+    #analog_source = dc_adjustment(udp_source("127.0.0.1", 7355))
+    #analog_source = wav_source('gqrx_20160724_151107_433810400.wav')
+    analog_source = udp_source("127.0.0.1", 7355)
 
-    source = binary(analog_source, 3000)
+    source = binary(analog_source, 20000)
 
-    for i in range(4):
+    last_result_time = None
+    last_signal_time = None
+    last_signal = None
+
+    while True:
         wait_for_sync(source)
+        result = manchester_decode(source)
 
-        manchester_decode(source)
+        if result != None:
+            signal_time, signal = result
+            if last_signal_time != None:
+                if datetime.now()-last_signal_time < timedelta(seconds=1) \
+                    and last_signal == signal \
+                    and (last_result_time is None or ((datetime.now() - last_result_time) > timedelta(seconds=5))):
+                    last_result_time = datetime.now()
+
+                    print "Confirmed result: %s at %s" % (signal, signal_time)
+
+            last_signal_time = signal_time
+            last_signal = signal
+
+
